@@ -5,23 +5,33 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Rect;
 import android.graphics.RectF;
+import android.os.Parcel;
+import android.os.Parcelable;
 import android.util.AttributeSet;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.LinearLayout;
 
-public class LevelIndicator extends LinearLayout implements View.OnTouchListener{
+import java.math.BigDecimal;
 
-    private final static int COUNT = 10;
+public class LevelIndicator extends LinearLayout implements View.OnTouchListener {
+
+    public final static int COUNT = 10;
     private Paint mPaint;
-    private Paint mPointerPaint;
+    private Paint mLargeTextPaint;
+    private Paint mSmallTextPaint;
     private RiskLevel[] mRiskLevels = new RiskLevel[COUNT];
-    float padding = 25;
+    public float padding = 25;
     float pointerY = 0;
 
     private float minY;
     private float maxY;
+    private Rect rect;
+    private int textHeight;
+    private float diameter;
+    private float currentValue;
 
     @Override
     public boolean onTouch(final View v, final MotionEvent event) {
@@ -35,11 +45,13 @@ public class LevelIndicator extends LinearLayout implements View.OnTouchListener
         float mPadding;
         private int level;
         private float diameter;
+        private float startY;
 
-        private RiskLevel(final Context context, final float padding, final int level) {
+        private RiskLevel(final Context context, final float padding, final int level, final float startY) {
             mContext = context;
             mPadding = padding;
             this.level = level;
+            this.startY = startY;
         }
 
         public void setDiameter(final float diameter) {
@@ -51,7 +63,7 @@ public class LevelIndicator extends LinearLayout implements View.OnTouchListener
         }
 
         public float getY() {
-            return level * (diameter + mPadding + mPadding / (COUNT - 1));
+            return startY + level * (diameter + mPadding + mPadding / (COUNT - 1));
         }
 
         public int getColor() {
@@ -59,12 +71,12 @@ public class LevelIndicator extends LinearLayout implements View.OnTouchListener
             return mContext.getResources().getColor(res);
         }
 
-        float getStartY() {
-            return getY() - mPadding/2;
+        float getMinLevel() {
+            return COUNT - level - 1 + 0.5f;
         }
 
-        float getEndY() {
-            return getY() + mPadding/2 + diameter;
+        float getMaxLevel() {
+            return COUNT - level - 1 + 1.5f;
         }
     }
 
@@ -91,21 +103,34 @@ public class LevelIndicator extends LinearLayout implements View.OnTouchListener
         mPaint.setStrokeWidth(2);
         mPaint.setStyle(Paint.Style.FILL_AND_STROKE);
 
-        mPointerPaint = new Paint();
-        mPointerPaint.setAntiAlias(true);
-        mPointerPaint.setStrokeWidth(2);
-        mPointerPaint.setStyle(Paint.Style.FILL_AND_STROKE);
+        int textSize = 60;
+
+        mLargeTextPaint = new Paint();
+        mLargeTextPaint.setAntiAlias(true);
+        mLargeTextPaint.setTextSize(textSize);
+
+        rect = new Rect();
+        mLargeTextPaint.getTextBounds("0", 0, 1, rect);
+        textHeight = rect.height();
+
+        mSmallTextPaint = new Paint();
+        mSmallTextPaint.setAntiAlias(true);
+        mSmallTextPaint.setTextSize(textSize / 2);
 
         for (int i = 0; i < COUNT; i++) {
-            mRiskLevels[i] = new RiskLevel(getContext(), padding, i);
+            mRiskLevels[i] = new RiskLevel(getContext(), padding, i, textHeight / 2);
         }
+    }
+
+    public int getValuePadding() {
+        return textHeight / 2;
     }
 
     @Override
     protected void onDraw(final Canvas canvas) {
         super.onDraw(canvas);
-        float height = getHeight();
-        float diameter = height / COUNT - padding;
+        float height = getHeight() - textHeight;
+        diameter = height / COUNT - padding;
         float length = diameter * 4.3f;
 
         for (int i = 0; i < COUNT; i++) {
@@ -127,12 +152,28 @@ public class LevelIndicator extends LinearLayout implements View.OnTouchListener
             pointerY = maxY;
         }
 
+        currentValue = getLevel(pointerY, minY, maxY, 1f, COUNT);
+
         for (RiskLevel level : mRiskLevels) {
-            if (level.getStartY() <= pointerY && level.getEndY() >= pointerY) {
-                mPointerPaint.setColor(level.getColor());
-                drawTriangle(canvas, mRiskLevels[0].getX() + length + padding + 2*diameter, pointerY, diameter);
+            if (Float.compare(level.getMinLevel(), currentValue) <= 0 && Float.compare(level.getMaxLevel(), currentValue) > 0) {
+                mLargeTextPaint.setColor(level.getColor());
+                mSmallTextPaint.setColor(level.getColor());
+                drawTriangle(canvas, mRiskLevels[0].getX() + length + padding + diameter, pointerY, diameter);
+                break;
             }
         }
+
+        BigDecimal bigDecimal = new BigDecimal(String.valueOf(currentValue));
+        bigDecimal = bigDecimal.setScale(2, BigDecimal.ROUND_CEILING);
+
+        mLargeTextPaint.getTextBounds(bigDecimal.toString(), 0, bigDecimal.toString().length(), rect);
+
+        setPadding(0, rect.height(), 0, 0);
+
+        float textY = pointerY + rect.height() / 2;
+
+        canvas.drawText(bigDecimal.toString(), 200, textY, mLargeTextPaint);
+        canvas.drawText("/" + String.valueOf(COUNT), (200 + rect.width() + 5), textY, mSmallTextPaint);
 
     }
 
@@ -155,8 +196,67 @@ public class LevelIndicator extends LinearLayout implements View.OnTouchListener
         double y1 = y - side * Math.sin(Math.PI / 6);
         path.lineTo((float) x1, (float) y1);
         path.lineTo((float) x1, (float) (y1 + side));
-        canvas.drawPath(path, mPointerPaint);
+        canvas.drawPath(path, mLargeTextPaint);
     }
 
+
+    private float getLevel(float currentY, float minY, float maxY, float minValue, float maxValue) {
+        return (maxValue - minValue) * (currentY - minY) / (minY - maxY) + maxValue;
+    }
+
+    static class SavedState extends BaseSavedState {
+        float mCurrentY;
+
+        SavedState(Parcelable superState) {
+            super(superState);
+        }
+
+        protected SavedState(Parcel in) {
+            super(in);
+            mCurrentY = (float) in.readSerializable();
+        }
+
+        @Override
+        public void writeToParcel(Parcel out, int flags) {
+            super.writeToParcel(out, flags);
+            out.writeSerializable(mCurrentY);
+        }
+
+        //required field that makes Parcelables from a Parcel
+        public static final Parcelable.Creator<SavedState> CREATOR =
+                new Parcelable.Creator<SavedState>() {
+                    public SavedState createFromParcel(Parcel in) {
+                        return new SavedState(in);
+                    }
+
+                    public SavedState[] newArray(int size) {
+                        return new SavedState[size];
+                    }
+                };
+    }
+
+    @Override
+    protected Parcelable onSaveInstanceState() {
+
+        Parcelable superState = super.onSaveInstanceState();
+
+        SavedState state = new SavedState(superState);
+        state.mCurrentY = pointerY;
+        return state;
+    }
+
+    @Override
+    protected void onRestoreInstanceState(Parcelable state) {
+        if (!(state instanceof SavedState)) {
+            super.onRestoreInstanceState(state);
+            return;
+        }
+
+        SavedState savedState = (SavedState) state;
+        super.onRestoreInstanceState(savedState.getSuperState());
+
+        pointerY = savedState.mCurrentY;
+        invalidate();
+    }
 
 }

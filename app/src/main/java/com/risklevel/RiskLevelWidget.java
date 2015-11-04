@@ -31,8 +31,11 @@ public class RiskLevelWidget extends FrameLayout {
         View firstChild = getChildAt(0);
         int firstChildWidth = firstChild.getMeasuredWidth();
         int firstChildHeight = firstChild.getMeasuredHeight();
-        firstChild.layout(0, 0, firstChildWidth, firstChildHeight);
         View secondChild = getChildAt(1);
         secondChild.layout(firstChildWidth, 0, r, firstChildHeight);
+        LevelIndicator indicator = (LevelIndicator) secondChild;
+        firstChild.layout(0, 0, firstChildWidth, firstChildHeight);//todo
+        float diameter = secondChild.getMeasuredHeight() / LevelIndicator.COUNT - indicator.padding;
+        firstChild.setPadding(0, indicator.getValuePadding() - (int) diameter / 2, 0, indicator.getValuePadding() - (int) diameter / 2);
     }
 }
