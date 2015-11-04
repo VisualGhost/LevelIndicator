@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="risk_10">#ff923222</color>
+    <color name="risk_9">#fff04941</color>
+    <color name="risk_8">#ffdf5f42</color>
+    <color name="risk_7">#ffe78771</color>
+    <color name="risk_6">#ffefafa1</color>
+    <color name="risk_5">#fff7d7cf</color>
+    <color name="risk_4">#ffd1f4eb</color>
+    <color name="risk_3">#ffa4ead7</color>
+    <color name="risk_2">#ff77dfc4</color>
+    <color name="risk_1">#ff1cca9d</color>
+</resources>
