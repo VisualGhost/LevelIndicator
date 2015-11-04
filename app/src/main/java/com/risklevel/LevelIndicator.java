@@ -1,6 +1,8 @@
 package com.risklevel;
 
 import android.content.Context;
+import android.content.res.Resources;
+import android.content.res.TypedArray;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
@@ -18,20 +20,121 @@ import java.math.BigDecimal;
 
 public class LevelIndicator extends LinearLayout implements View.OnTouchListener {
 
-    public final static int COUNT = 10;
-    private Paint mPaint;
-    private Paint mLargeTextPaint;
-    private Paint mSmallTextPaint;
-    private RiskLevel[] mRiskLevels = new RiskLevel[COUNT];
-    public float padding = 25;
-    float pointerY = 0;
+    // todo not public
+    public final static int MAX_RISK_LEVEL = 10;
+    private final static int MIN_RISK_LEVEL = 1;
+    private final static int DEFAULT_RISK_LEVEL = 5;
 
+    private Paint mLevelPillPaint;
+    private Paint mCurrentLevelTextPaint;
+    private Paint mMaxLevelTextPaint;
+
+    // "9.16/10" - "9.16" - is a current level; "/10" - max level
+
+    // todo not public
+    public float mVerticalDistanceBetweenPills;
+    private float mCurrentLevelTextHeight; // the height of "9.16"
+    private int mMinLevel;
+    private int mMaxLevel;
+    private RiskLevelPill[] mRiskLevelPills;
+    private float mProportionBetweenWidthAndHeightOfPill;
+
+    float pointerY = -1;
     private float minY;
     private float maxY;
+    private float currentLevel;
     private Rect rect;
-    private int textHeight;
-    private float diameter;
-    private float currentValue;
+
+    public LevelIndicator(final Context context, final AttributeSet attrs, final int defStyleAttr) {
+        super(context, attrs, defStyleAttr);
+        init(context, attrs);
+    }
+
+    public LevelIndicator(final Context context, final AttributeSet attrs) {
+        super(context, attrs);
+        init(context, attrs);
+    }
+
+    public LevelIndicator(final Context context) {
+        super(context);
+        init(context, null);
+    }
+
+    private void init(Context context, AttributeSet attrs) {
+        float levelTextSize = 0;
+        float horizontalPillMargin = 0;
+        rect = new Rect();
+
+        if (attrs != null) {
+            TypedArray array = null;
+            try {
+                array = context.obtainStyledAttributes(attrs, R.styleable.Risk);
+                mVerticalDistanceBetweenPills = array.getDimension(R.styleable.Risk_verticalPillDistance, 0);
+                levelTextSize = array.getDimension(R.styleable.Risk_levelTextSize, 0);
+                horizontalPillMargin = array.getDimension(R.styleable.Risk_horizontalPillMargin, 0);
+                mMinLevel = array.getInteger(R.styleable.Risk_minLevel, MIN_RISK_LEVEL);
+                mMaxLevel = array.getInteger(R.styleable.Risk_maxLevel, MAX_RISK_LEVEL);
+                mProportionBetweenWidthAndHeightOfPill = array.getFloat(R.styleable.Risk_proportionBetweenWidthAndHeightOfPill, 1);
+            } finally {
+                if (array != null) {
+                    array.recycle();
+                }
+            }
+        }
+        mRiskLevelPills = new RiskLevelPill[mMaxLevel];
+        setOnTouchListener(this);
+        setBackgroundColor(Color.TRANSPARENT);
+        initPillPaint();
+        initCurrentLevelPaint(levelTextSize);
+        initMaxLevelPaint(levelTextSize);
+        mCurrentLevelTextHeight = getCurrentLevelTextHeight();
+        initLevelPills(horizontalPillMargin);
+    }
+
+    private void initPillPaint() {
+        mLevelPillPaint = new Paint();
+        mLevelPillPaint.setAntiAlias(true);
+        mLevelPillPaint.setStrokeWidth(2);
+        mLevelPillPaint.setStyle(Paint.Style.FILL_AND_STROKE);
+    }
+
+    private void initCurrentLevelPaint(float textSize) {
+        mCurrentLevelTextPaint = new Paint();
+        mCurrentLevelTextPaint.setAntiAlias(true);
+        mCurrentLevelTextPaint.setTextSize(textSize);
+    }
+
+    private void initMaxLevelPaint(float textSize) {
+        mMaxLevelTextPaint = new Paint();
+        mMaxLevelTextPaint.setAntiAlias(true);
+        mMaxLevelTextPaint.setTextSize(textSize / 2);
+    }
+
+    private float getCurrentLevelTextHeight() {
+        // The height is the same for all numbers
+        return getTextHeight(rect, mCurrentLevelTextPaint, "0");
+    }
+
+    private float getCurrentLevelTextWidth(String text) {
+        return getTextWidth(rect, mCurrentLevelTextPaint, text);
+    }
+
+    private float getTextHeight(Rect rect, Paint paint, String text) {
+        paint.getTextBounds(text, 0, text.length(), rect);
+        return rect.height();
+    }
+
+    private float getTextWidth(Rect rect, Paint paint, String text) {
+        paint.getTextBounds(text, 0, text.length(), rect);
+        return rect.width();
+    }
+
+    private void initLevelPills(float horizontalPillMargin) {
+        for (int i = 0; i < mMaxLevel; i++) {
+            mRiskLevelPills[i] = new RiskLevelPill(horizontalPillMargin,
+                    mVerticalDistanceBetweenPills, i, mCurrentLevelTextHeight / 2, mMaxLevel);
+        }
+    }
 
     @Override
     public boolean onTouch(final View v, final MotionEvent event) {
@@ -40,109 +143,86 @@ public class LevelIndicator extends LinearLayout implements View.OnTouchListener
         return false;
     }
 
-    private static final class RiskLevel {
-        Context mContext;
-        float mPadding;
-        private int level;
-        private float diameter;
-        private float startY;
+    private static final class RiskLevelPill {
+        float horizontalMargin;
+        float verticalMargin;
+        float height;
+        float startY;
+        int index;
+        int maxLevel;
 
-        private RiskLevel(final Context context, final float padding, final int level, final float startY) {
-            mContext = context;
-            mPadding = padding;
-            this.level = level;
+        RiskLevelPill(final float horizontalMargin, final float verticalMargin, final int index, final float startY, final int maxLevel) {
+            this.horizontalMargin = horizontalMargin;
+            this.verticalMargin = verticalMargin;
+            this.index = index;
             this.startY = startY;
+            this.maxLevel = maxLevel;
         }
 
-        public void setDiameter(final float diameter) {
-            this.diameter = diameter;
+        /**
+         * Sets the height of pill.
+         */
+        void setHeight(final float height) {
+            this.height = height;
         }
 
-        public float getX() {
-            return mPadding;
+        /**
+         * @return The X-coordinate of pill.
+         */
+        float getX() {
+            return horizontalMargin;
         }
 
-        public float getY() {
-            return startY + level * (diameter + mPadding + mPadding / (COUNT - 1));
+        /**
+         * @return The Y-coordinate of pill.
+         */
+        float getY() {
+            return startY + index * (height + (verticalMargin * maxLevel) / (maxLevel - 1));
         }
 
-        public int getColor() {
-            int res = mContext.getResources().getIdentifier("risk_" + String.valueOf(COUNT - level), "color", mContext.getPackageName());
-            return mContext.getResources().getColor(res);
+        /**
+         * @return The level of risk that this pill represents.
+         */
+        int getLevel() {
+            return maxLevel - index;
         }
 
-        float getMinLevel() {
-            return COUNT - level - 1 + 0.5f;
+        /**
+         * @return The minimum value of level that is represented by this pill.
+         */
+        float getMinEdge() {
+            return getLevel() - 0.5f;
         }
 
-        float getMaxLevel() {
-            return COUNT - level - 1 + 1.5f;
-        }
-    }
-
-    public LevelIndicator(final Context context, final AttributeSet attrs, final int defStyleAttr) {
-        super(context, attrs, defStyleAttr);
-        init();
-    }
-
-    public LevelIndicator(final Context context, final AttributeSet attrs) {
-        super(context, attrs);
-        init();
-    }
-
-    public LevelIndicator(final Context context) {
-        super(context);
-        init();
-    }
-
-    private void init() {
-        setOnTouchListener(this);
-        setBackgroundColor(Color.TRANSPARENT);
-        mPaint = new Paint();
-        mPaint.setAntiAlias(true);
-        mPaint.setStrokeWidth(2);
-        mPaint.setStyle(Paint.Style.FILL_AND_STROKE);
-
-        int textSize = 60;
-
-        mLargeTextPaint = new Paint();
-        mLargeTextPaint.setAntiAlias(true);
-        mLargeTextPaint.setTextSize(textSize);
-
-        rect = new Rect();
-        mLargeTextPaint.getTextBounds("0", 0, 1, rect);
-        textHeight = rect.height();
-
-        mSmallTextPaint = new Paint();
-        mSmallTextPaint.setAntiAlias(true);
-        mSmallTextPaint.setTextSize(textSize / 2);
-
-        for (int i = 0; i < COUNT; i++) {
-            mRiskLevels[i] = new RiskLevel(getContext(), padding, i, textHeight / 2);
+        /**
+         * @return The maximum value of level that is represented by this pill.
+         */
+        float getMaxEdge() {
+            return getLevel() + 0.5f;
         }
     }
 
     public int getValuePadding() {
-        return textHeight / 2;
+        return (int) (mCurrentLevelTextHeight / 2);
     }
 
     @Override
     protected void onDraw(final Canvas canvas) {
         super.onDraw(canvas);
-        float height = getHeight() - textHeight;
-        diameter = height / COUNT - padding;
-        float length = diameter * 4.3f;
 
-        for (int i = 0; i < COUNT; i++) {
-            RiskLevel riskLevel = mRiskLevels[i];
-            riskLevel.setDiameter(diameter);
+        float availableHeight = getHeight() - mCurrentLevelTextHeight;
+        float pillHeight = availableHeight / mMaxLevel - mVerticalDistanceBetweenPills;
+        float pillLength = pillHeight * mProportionBetweenWidthAndHeightOfPill;
 
-            mPaint.setColor(riskLevel.getColor());
-            drawLevel(canvas, riskLevel.getX(), riskLevel.getY(), length, diameter);
+        drawPills(canvas, pillHeight, pillLength);
+
+        minY = mRiskLevelPills[0].getY() + pillHeight / 2;
+        maxY = mRiskLevelPills[mMaxLevel - 1].getY() + pillHeight / 2;
+
+        //todo
+        if (Float.compare(pointerY, -1) == 0) {
+            pointerY = getCurrentY(DEFAULT_RISK_LEVEL, minY, maxY, mMinLevel, mMaxLevel);
         }
-
-        minY = mRiskLevels[0].getY() + diameter / 2;
-        maxY = mRiskLevels[COUNT - 1].getY() + diameter / 2;
 
         if (pointerY < minY) {
             pointerY = minY;
@@ -152,56 +232,124 @@ public class LevelIndicator extends LinearLayout implements View.OnTouchListener
             pointerY = maxY;
         }
 
-        currentValue = getLevel(pointerY, minY, maxY, 1f, COUNT);
+        currentLevel = getLevel(pointerY, minY, maxY, mMinLevel, mMaxLevel);
 
-        for (RiskLevel level : mRiskLevels) {
-            if (Float.compare(level.getMinLevel(), currentValue) <= 0 && Float.compare(level.getMaxLevel(), currentValue) > 0) {
-                mLargeTextPaint.setColor(level.getColor());
-                mSmallTextPaint.setColor(level.getColor());
-                drawTriangle(canvas, mRiskLevels[0].getX() + length + padding + diameter, pointerY, diameter);
+        for (RiskLevelPill level : mRiskLevelPills) {
+            if (Float.compare(level.getMinEdge(), currentLevel) <= 0 && Float.compare(level.getMaxEdge(), currentLevel) > 0) {
+                mCurrentLevelTextPaint.setColor(getColor(level.index));
+                mMaxLevelTextPaint.setColor(getColor(level.index));
+                drawTrianglePointerToLevelPill(canvas, mRiskLevelPills[0].getX() + pillLength + mVerticalDistanceBetweenPills + pillHeight, pointerY, pillHeight);
                 break;
             }
         }
 
-        BigDecimal bigDecimal = new BigDecimal(String.valueOf(currentValue));
+        BigDecimal bigDecimal = new BigDecimal(String.valueOf(currentLevel));
         bigDecimal = bigDecimal.setScale(2, BigDecimal.ROUND_CEILING);
 
-        mLargeTextPaint.getTextBounds(bigDecimal.toString(), 0, bigDecimal.toString().length(), rect);
+        float textY = pointerY + mCurrentLevelTextHeight / 2;
 
-        setPadding(0, rect.height(), 0, 0);
-
-        float textY = pointerY + rect.height() / 2;
-
-        canvas.drawText(bigDecimal.toString(), 200, textY, mLargeTextPaint);
-        canvas.drawText("/" + String.valueOf(COUNT), (200 + rect.width() + 5), textY, mSmallTextPaint);
+        canvas.drawText(bigDecimal.toString(), 200, textY, mCurrentLevelTextPaint);
+        canvas.drawText("/" + String.valueOf(mMaxLevel), (200 + getCurrentLevelTextWidth(bigDecimal.toString()) + 5), textY, mMaxLevelTextPaint);
 
     }
 
-    private void drawLevel(Canvas canvas, float x, float y, float length, float diameter) {
-        RectF leftOval = drawOval(x, y, diameter + x, diameter + y);
-        canvas.drawArc(leftOval, 90, 180, false, mPaint);
-        RectF rightOval = drawOval(x + length + diameter / 2, y, 3 * diameter / 2 + x + length, diameter + y);
-        canvas.drawArc(rightOval, 90, -180, false, mPaint);
-        canvas.drawRect(x + diameter / 2, y, x + length + diameter, y + diameter, mPaint);
+    private void drawPills(Canvas canvas, float pillHeight, float pillLength) {
+        for (int i = 0; i < mMaxLevel; i++) {
+            RiskLevelPill riskLevelPill = mRiskLevelPills[i];
+            riskLevelPill.setHeight(pillHeight);
+            mLevelPillPaint.setColor(getColor(i));
+            drawLevelPill(canvas, riskLevelPill.getX(), riskLevelPill.getY(), pillLength, pillHeight);
+        }
     }
 
-    private RectF drawOval(float left, float top, float right, float bottom) {
-        return new RectF(left, top, right, bottom);
+    private int getColor(int level) {
+        try {
+            int res = getResources().getIdentifier("risk_" +
+                    String.valueOf(mMaxLevel - level), "color", getContext().getPackageName());
+            return getResources().getColor(res);
+        } catch (Resources.NotFoundException e) {
+            return Color.WHITE;
+        }
     }
 
-    private void drawTriangle(Canvas canvas, float x, float y, float side) {
+    private void drawLevelPill(Canvas canvas, float x, float y, float length, float height) {
+        drawStartSegment(canvas, x, y, height);
+        drawEndSegment(canvas, x, y, height, length);
+        drawPillRectangle(canvas, x, y, length, height);
+    }
+
+    private void drawStartSegment(Canvas canvas, float x, float y, float height) {
+        drawSegment(canvas, x, y, height + x, height + y, 90, 180);
+    }
+
+    private void drawEndSegment(Canvas canvas, float x, float y, float height, float length) {
+        float left = x + length + height / 2;
+        float right = 3 * height / 2 + x + length;
+        float bottom = height + y;
+        drawSegment(canvas, left, y, right, bottom, 90, -180);
+    }
+
+    private void drawSegment(Canvas canvas,
+                             float left,
+                             float top,
+                             float right,
+                             float bottom,
+                             float startAngle,
+                             float sweepAngle) {
+        RectF rectF = new RectF(left, top, right, bottom);
+        canvas.drawArc(rectF, startAngle, sweepAngle, false, mLevelPillPaint);
+    }
+
+    private void drawPillRectangle(Canvas canvas, float x, float y, float length, float height) {
+        float left = x + height / 2;
+        float right = x + length + height;
+        float bottom = y + height;
+        canvas.drawRect(left, y, right, bottom, mLevelPillPaint);
+    }
+
+    /**
+     * Draw the pointer "<|"
+     *
+     * @param canvas           The canvas.
+     * @param x                The x-coordinate of pointer.
+     * @param y                The y-coordinate of pointer.
+     * @param lengthOfTriangle The length of triangle side.
+     */
+    private void drawTrianglePointerToLevelPill(Canvas canvas, float x, float y, float lengthOfTriangle) {
         Path path = new Path();
         path.moveTo(x, y);
-        double x1 = x + side * Math.cos(Math.PI / 6);
-        double y1 = y - side * Math.sin(Math.PI / 6);
+        double angle = Math.PI / 6;
+        double x1 = x + lengthOfTriangle * Math.cos(angle);
+        double y1 = y - lengthOfTriangle * Math.sin(angle);
         path.lineTo((float) x1, (float) y1);
-        path.lineTo((float) x1, (float) (y1 + side));
-        canvas.drawPath(path, mLargeTextPaint);
+        path.lineTo((float) x1, (float) (y1 + lengthOfTriangle));
+        canvas.drawPath(path, mCurrentLevelTextPaint);
     }
 
+    /**
+     * Calculates risk level based on y-coordinate
+     *
+     * @param currentY     The current y-coordinate where the pointer is.
+     * @param minY         The min y-coordinate where the pointer can be.
+     * @param maxY         The max y-coordinate where the pointer can be.
+     * @param minRiskValue The min available risk level.
+     * @param maxRiskValue The max available risk level.
+     */
+    private float getLevel(float currentY, float minY, float maxY, float minRiskValue, float maxRiskValue) {
+        return (maxRiskValue - minRiskValue) * (currentY - minY) / (minY - maxY) + maxRiskValue;
+    }
 
-    private float getLevel(float currentY, float minY, float maxY, float minValue, float maxValue) {
-        return (maxValue - minValue) * (currentY - minY) / (minY - maxY) + maxValue;
+    /**
+     * Calculates the y-coordinate of pointer based on given risk level.
+     *
+     * @param currentLevel The risk level.
+     * @param minY         The min y-coordinate where the pointer can be.
+     * @param maxY         The max y-coordinate where the pointer can be.
+     * @param minRiskValue The min available risk level.
+     * @param maxRiskValue The max available risk level.
+     */
+    private float getCurrentY(float currentLevel, float minY, float maxY, float minRiskValue, float maxRiskValue) {
+        return (currentLevel - maxRiskValue) * (minY - maxY) / (maxRiskValue - minRiskValue) + minY;
     }
 
     static class SavedState extends BaseSavedState {
@@ -222,7 +370,6 @@ public class LevelIndicator extends LinearLayout implements View.OnTouchListener
             out.writeSerializable(mCurrentY);
         }
 
-        //required field that makes Parcelables from a Parcel
         public static final Parcelable.Creator<SavedState> CREATOR =
                 new Parcelable.Creator<SavedState>() {
                     public SavedState createFromParcel(Parcel in) {

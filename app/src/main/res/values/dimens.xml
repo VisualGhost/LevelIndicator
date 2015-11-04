@@ -5,4 +5,8 @@
     <dimen name="widget_width">280dp</dimen>
     <dimen name="widget_height">200dp</dimen>
     <dimen name="text_padding">10dp</dimen>
+
+    <dimen name="risk_level_horizontal_pill_margin">10dp</dimen>
+    <dimen name="risk_level_distance_between_pills">10dp</dimen>
+    <dimen name="risk_level_text_size">25sp</dimen>
 </resources>

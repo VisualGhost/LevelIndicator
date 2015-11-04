@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <declare-styleable name="Risk">
+        <attr name="horizontalPillMargin" format="dimension"/>
+        <attr name="verticalPillDistance" format="dimension"/>
+        <attr name="levelTextSize" format="dimension"/>
+        <attr name="minLevel" format="integer"/>
+        <attr name="maxLevel" format="integer"/>
+        <attr name="proportionBetweenWidthAndHeightOfPill" format="float"/>
+    </declare-styleable>
+</resources>
